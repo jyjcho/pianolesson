@@ -14,6 +14,7 @@ struct SettingsView: View {
                 midiSection
                 audioSection
                 displaySection
+                practiceSection
                 developerSection
                 aboutSection
             }
@@ -104,6 +105,18 @@ struct SettingsView: View {
             Toggle(isOn: $settings.showNoteLabels) {
                 Label("Show note labels", systemImage: "character.textbox")
             }
+        }
+    }
+
+    private var practiceSection: some View {
+        Section {
+            Toggle(isOn: $settings.enforceNoteLength) {
+                Label("Enforce note length", systemImage: "clock")
+            }
+        } header: {
+            Text("Practice")
+        } footer: {
+            Text("Checks that each note is held for roughly its written duration (quarter, half, etc.) at the lesson's tempo. Retry if a note is held too briefly or too long.")
         }
     }
 

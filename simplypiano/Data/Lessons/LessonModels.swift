@@ -24,6 +24,27 @@ struct Lesson: Identifiable, Codable {
     let category: LessonCategory
     let summary: String
     let measures: [Measure]
+    let tempoBPM: Int?
+
+    init(
+        id: String,
+        title: String,
+        category: LessonCategory,
+        summary: String,
+        measures: [Measure],
+        tempoBPM: Int? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.category = category
+        self.summary = summary
+        self.measures = measures
+        self.tempoBPM = tempoBPM
+    }
+
+    var effectiveTempoBPM: Int {
+        tempoBPM ?? (category == .rhythm ? 60 : 80)
+    }
 
     var expectedEvents: [Set<Pitch>] {
         measures.flatMap { measure in

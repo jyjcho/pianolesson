@@ -13,6 +13,7 @@ final class NoteInputBus {
 
     private(set) var activeNotes: Set<UInt8> = []
     var onNoteOn: ((UInt8) -> Void)?
+    var onNoteOff: ((UInt8) -> Void)?
     let midi: MidiManager
 
     var isMidiConnected: Bool { !midi.sourceNames.isEmpty }
@@ -37,7 +38,8 @@ final class NoteInputBus {
     }
 
     func noteOff(_ midi: UInt8, source: NoteSource) {
-        activeNotes.remove(midi)
+        let wasActive = activeNotes.remove(midi) != nil
         AudioEngine.shared.noteOff(midi)
+        if wasActive { onNoteOff?(midi) }
     }
 }

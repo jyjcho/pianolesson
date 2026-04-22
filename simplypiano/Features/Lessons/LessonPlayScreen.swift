@@ -119,6 +119,11 @@ struct LessonPlayScreen: View {
             HStack {
                 Text("\(min(engine.cursor + 1, engine.totalSteps)) / \(engine.totalSteps)")
                     .font(.caption.monospacedDigit())
+                if let lengthLabel {
+                    Text(lengthLabel)
+                        .font(.caption.bold())
+                        .foregroundStyle(.orange)
+                }
                 Spacer()
                 Text("Accuracy \(engine.accuracy)%")
                     .font(.caption.monospacedDigit())
@@ -141,6 +146,15 @@ struct LessonPlayScreen: View {
             )
             .frame(maxWidth: .infinity)
             .frame(height: 240)
+        }
+    }
+
+    private var lengthLabel: String? {
+        guard case .feedback(correct: false) = engine.phase else { return nil }
+        switch engine.lastLength {
+        case .tooShort: return "Hold longer"
+        case .tooLong: return "Too long"
+        case .good, .notChecked: return nil
         }
     }
 
