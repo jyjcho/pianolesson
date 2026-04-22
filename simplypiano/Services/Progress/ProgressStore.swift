@@ -30,15 +30,9 @@ final class ProgressStore {
     private(set) var snapshot: ProgressSnapshot
     private(set) var newlyEarnedBadges: [BadgeId] = []
 
-    private let defaultsKey = "progressStore.v1"
-
-    private var fileURL: URL {
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        return docs.appendingPathComponent("progress.json")
-    }
-
     private init() {
-        self.snapshot = Self.loadInitialSnapshot(defaultsKey: "progressStore.v1")
+        let profileId = ProfileStore.shared.currentProfileId
+        self.snapshot = Self.loadSnapshot(for: profileId)
     }
 
     var totalLessons: Int { LessonRegistry.all.count }
@@ -106,6 +100,21 @@ final class ProgressStore {
         return newlyEarnedBadges
     }
 
+    func saveCurrent() {
+        persist()
+    }
+
+    func reloadForCurrentProfile() {
+        let id = ProfileStore.shared.currentProfileId
+        snapshot = Self.loadSnapshot(for: id)
+        newlyEarnedBadges.removeAll()
+    }
+
+    func deleteStorage(for profileId: UUID) {
+        UserDefaults.standard.removeObject(forKey: Self.defaultsKey(for: profileId))
+        try? FileManager.default.removeItem(at: Self.fileURL(for: profileId))
+    }
+
     private func updateStreak() {
         let cal = Calendar.current
         let today = cal.startOfDay(for: Date())
@@ -134,22 +143,32 @@ final class ProgressStore {
     }
 
     private func persist() {
+        let id = ProfileStore.shared.currentProfileId
         guard let data = try? JSONEncoder().encode(snapshot) else { return }
-        UserDefaults.standard.set(data, forKey: defaultsKey)
-        try? data.write(to: fileURL, options: .atomic)
+        UserDefaults.standard.set(data, forKey: Self.defaultsKey(for: id))
+        try? data.write(to: Self.fileURL(for: id), options: .atomic)
     }
 
-    private static func loadInitialSnapshot(defaultsKey: String) -> ProgressSnapshot {
+    private static func defaultsKey(for profileId: UUID) -> String {
+        "progressStore.v1.\(profileId.uuidString)"
+    }
+
+    private static func fileURL(for profileId: UUID) -> URL {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return docs.appendingPathComponent("progress-\(profileId.uuidString).json")
+    }
+
+    private static func loadSnapshot(for profileId: UUID) -> ProgressSnapshot {
         let decoder = JSONDecoder()
-        if let data = UserDefaults.standard.data(forKey: defaultsKey),
+        let key = defaultsKey(for: profileId)
+        if let data = UserDefaults.standard.data(forKey: key),
            let decoded = try? decoder.decode(ProgressSnapshot.self, from: data) {
             return decoded
         }
-        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
-        let url = docs.appendingPathComponent("progress.json")
+        let url = fileURL(for: profileId)
         if let data = try? Data(contentsOf: url),
            let decoded = try? decoder.decode(ProgressSnapshot.self, from: data) {
-            UserDefaults.standard.set(data, forKey: defaultsKey)
+            UserDefaults.standard.set(data, forKey: key)
             return decoded
         }
         return .empty

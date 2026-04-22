@@ -2,6 +2,8 @@ import SwiftUI
 
 struct HomeView: View {
     @State private var progress = ProgressStore.shared
+    @State private var profileStore = ProfileStore.shared
+    @State private var showingProfilePicker = false
 
     var body: some View {
         NavigationStack {
@@ -19,7 +21,11 @@ struct HomeView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("SimplyPiano")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) { profileButton }
                 ToolbarItem(placement: .topBarTrailing) { MidiStatusBadge() }
+            }
+            .sheet(isPresented: $showingProfilePicker) {
+                ProfilePickerView()
             }
             .navigationDestination(for: Course.self) { course in
                 CourseDetailView(course: course)
@@ -30,6 +36,25 @@ struct HomeView: View {
                 } else {
                     Text("Lesson not found")
                 }
+            }
+        }
+    }
+
+    private var profileButton: some View {
+        Button {
+            showingProfilePicker = true
+        } label: {
+            HStack(spacing: 6) {
+                ZStack {
+                    Circle()
+                        .fill(profileStore.currentProfile.color.opacity(0.22))
+                    Text(profileStore.currentProfile.emoji)
+                        .font(.system(size: 18))
+                }
+                .frame(width: 32, height: 32)
+                Text(profileStore.currentProfile.name)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.primary)
             }
         }
     }

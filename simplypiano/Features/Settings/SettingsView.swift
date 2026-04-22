@@ -3,10 +3,14 @@ import SwiftUI
 struct SettingsView: View {
     @State private var settings = AppSettings.shared
     @State private var bus = NoteInputBus.shared
+    @State private var profileStore = ProfileStore.shared
+    @State private var showingProfilePicker = false
+    @State private var editingCurrentProfile = false
 
     var body: some View {
         NavigationStack {
             List {
+                profileSection
                 midiSection
                 audioSection
                 displaySection
@@ -14,6 +18,43 @@ struct SettingsView: View {
                 aboutSection
             }
             .navigationTitle("Settings")
+            .sheet(isPresented: $showingProfilePicker) {
+                ProfilePickerView()
+            }
+            .sheet(isPresented: $editingCurrentProfile) {
+                ProfileEditView(mode: .edit(profileStore.currentProfile))
+            }
+        }
+    }
+
+    private var profileSection: some View {
+        Section("Profile") {
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(profileStore.currentProfile.color.opacity(0.22))
+                    Text(profileStore.currentProfile.emoji)
+                        .font(.system(size: 28))
+                }
+                .frame(width: 48, height: 48)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(profileStore.currentProfile.name)
+                        .font(.headline)
+                    Text("\(profileStore.profiles.count) profile\(profileStore.profiles.count == 1 ? "" : "s") total")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Button("Edit") { editingCurrentProfile = true }
+                    .buttonStyle(.bordered)
+            }
+            .padding(.vertical, 4)
+
+            Button {
+                showingProfilePicker = true
+            } label: {
+                Label("Switch profile", systemImage: "person.2.fill")
+            }
         }
     }
 
