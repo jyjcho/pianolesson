@@ -11,7 +11,7 @@ import SwiftUI
 struct simplypianoApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            RootTabView()
         }
     }
 }

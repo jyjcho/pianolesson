@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<style>
+  html, body { margin: 0; padding: 0; background: #ffffff; font-family: -apple-system, sans-serif; overflow: hidden; }
+  #sheet { width: 100vw; height: 100vh; }
+  .vf-note.hl-expected path, .vf-note.hl-expected rect { fill: #007AFF !important; stroke: #007AFF !important; }
+  .vf-note.hl-correct  path, .vf-note.hl-correct  rect { fill: #34C759 !important; stroke: #34C759 !important; }
+  .vf-note.hl-wrong    path, .vf-note.hl-wrong    rect { fill: #FF3B30 !important; stroke: #FF3B30 !important; }
+</style>
+</head>
+<body>
+<div id="sheet"></div>
+<script src="vexflow.js"></script>
+<script>
+(function () {
+  const post = (payload) => {
+    try { window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.sheet && window.webkit.messageHandlers.sheet.postMessage(payload); } catch (e) {}
+  };
+  const reportError = (message, source, line) => {
+    post({ type: "ERROR", message: String(message || "unknown"), source: source || null, line: line || null });
+  };
+  window.onerror = (message, source, line) => { reportError(message, source, line); return false; };
+  window.addEventListener("unhandledrejection", (event) => {
+    const reason = event && event.reason;
+    reportError((reason && reason.message) ? reason.message : String(reason));
+  });
+
+  let renderer = null;
+  let context = null;
+  let noteElements = [];
+
+  const pitchKey = (note, octave) => `${String(note).toUpperCase()}${octave}`;
+
+  const toVfKey = (pitch) => {
+    const acc = pitch.accidental === "sharp" ? "#"
+              : pitch.accidental === "flat"  ? "b"
+              : "";
+    return `${String(pitch.note).toLowerCase()}${acc}/${pitch.octave}`;
+  };
+
+  const toVfDuration = (d) => {
+    switch (d) {
+      case "whole":   return "w";
+      case "half":    return "h";
+      case "quarter": return "q";
+      case "eighth":  return "8";
+      default:        return "q";
+    }
+  };
+
+  function ensureRenderer() {
+    if (typeof VexFlow === "undefined") {
+      reportError("VexFlow global not loaded");
+      return false;
+    }
+    const container = document.getElementById("sheet");
+    if (!renderer) {
+      const { Renderer } = VexFlow;
+      renderer = new Renderer(container, Renderer.Backends.SVG);
+      context = renderer.getContext();
+    }
+    const width = Math.max(container.clientWidth, 320);
+    const height = Math.max(container.clientHeight, 180);
+    renderer.resize(width, height);
+    return true;
+  }
+
+  function init() {
+    try {
+      if (!ensureRenderer()) return;
+      post({ type: "READY" });
+    } catch (e) {
+      reportError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  function clear() {
+    try {
+      const container = document.getElementById("sheet");
+      container.innerHTML = "";
+      renderer = null;
+      context = null;
+      noteElements = [];
+      ensureRenderer();
+    } catch (e) {
+      reportError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  function renderMeasures(measures) {
+    try {
+      clear();
+      if (!renderer || !context) return;
+      if (!Array.isArray(measures) || measures.length === 0) return;
+
+      const { Stave, StaveNote, Formatter, Voice, Accidental } = VexFlow;
+      const container = document.getElementById("sheet");
+      const totalWidth = Math.max(container.clientWidth, 320);
+      const leftPad = 10;
+      const usable = totalWidth - leftPad - 10;
+      const measureWidth = Math.max(180, Math.floor(usable / measures.length));
+      let x = leftPad;
+      const y = 30;
+
+      measures.forEach((measure, idx) => {
+        const stave = new Stave(x, y, measureWidth);
+        if (idx === 0) {
+          stave.addClef("treble");
+          const ts = (measure && measure.timeSignature) || { numerator: 4, denominator: 4 };
+          stave.addTimeSignature(`${ts.numerator}/${ts.denominator}`);
+        }
+        stave.setContext(context).draw();
+
+        const vfNotes = [];
+        const pitchKeysPerNote = [];
+        const rawNotes = (measure && Array.isArray(measure.notes)) ? measure.notes : [];
+        rawNotes.forEach((n) => {
+          if (!n) return;
+          if (n.kind === "rest") {
+            vfNotes.push(new StaveNote({ keys: ["b/4"], duration: toVfDuration(n.duration) + "r" }));
+            pitchKeysPerNote.push([]);
+          } else {
+            const pitches = Array.isArray(n.pitches) ? n.pitches : [];
+            if (pitches.length === 0) return;
+            const keys = pitches.map(toVfKey);
+            const sn = new StaveNote({ keys, duration: toVfDuration(n.duration) });
+            pitches.forEach((p, i) => {
+              if (p.accidental === "sharp") sn.addModifier(new Accidental("#"), i);
+              else if (p.accidental === "flat") sn.addModifier(new Accidental("b"), i);
+            });
+            vfNotes.push(sn);
+            pitchKeysPerNote.push(pitches.map((p) => pitchKey(p.note, p.octave)));
+          }
+        });
+
+        if (vfNotes.length > 0) {
+          const ts = (measure && measure.timeSignature) || { numerator: 4, denominator: 4 };
+          const voice = new Voice({ numBeats: ts.numerator, beatValue: ts.denominator });
+          voice.setStrict(false);
+          voice.addTickables(vfNotes);
+          new Formatter().joinVoices([voice]).format([voice], Math.max(40, measureWidth - 40));
+          voice.draw(context, stave);
+
+          vfNotes.forEach((vfNote, i) => {
+            const el = (vfNote.attrs && vfNote.attrs.el) ? vfNote.attrs.el : null;
+            const keys = pitchKeysPerNote[i] || [];
+            keys.forEach((k) => { if (el) noteElements.push({ el, pitchKey: k }); });
+          });
+        }
+
+        x += measureWidth;
+      });
+    } catch (e) {
+      reportError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  function highlightNote(payload) {
+    try {
+      if (!payload) return;
+      const key = pitchKey(payload.note, payload.octave);
+      const state = payload.state;
+      const classes = ["hl-expected", "hl-correct", "hl-wrong"];
+      noteElements.forEach(({ el, pitchKey: k }) => {
+        if (!el || k !== key) return;
+        classes.forEach((c) => el.classList.remove(c));
+        if (state && state !== "clear") el.classList.add(`hl-${state}`);
+      });
+    } catch (e) {
+      reportError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  function clearHighlights() {
+    try {
+      const classes = ["hl-expected", "hl-correct", "hl-wrong"];
+      noteElements.forEach(({ el }) => { if (el) classes.forEach((c) => el.classList.remove(c)); });
+    } catch (e) {
+      reportError(e && e.message ? e.message : String(e));
+    }
+  }
+
+  window.sheet = { renderMeasures, highlightNote, clearHighlights, clear };
+
+  if (document.readyState === "complete" || document.readyState === "interactive") {
+    init();
+  } else {
+    document.addEventListener("DOMContentLoaded", init);
+  }
+})();
+</script>
+</body>
+</html>
